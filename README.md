@@ -10,8 +10,8 @@ you plan the battery around that forecast. This project builds both, step by ste
 
 ## Plan
 - [x] Automated download of hourly day-ahead prices (DE-LU) from the SMARD API (Bundesnetzagentur)
-- [ ] Exploratory analysis: daily and weekly price patterns, negative-price hours
-- [ ] Baseline forecast: "same hour last week" (seasonal naive), measured with MAE
+- [x] Exploratory analysis: daily and weekly price patterns, negative-price hours
+- [x] Baseline forecast: "same hour last week" (seasonal naive), measured with MAE
 - [ ] Machine-learning forecast (gradient boosting on calendar and lagged-price features), compared to the baseline
 - [ ] Battery optimization with linear programming (PuLP): 1 MWh battery, charge/discharge limits,
       efficiency losses; compared to a simple rule-based strategy
@@ -34,7 +34,21 @@ Source: [SMARD.de](https://www.smard.de) (Bundesnetzagentur), filter 4169.
 - Weekends are 25–35 EUR/MWh cheaper than weekdays, so the weekday matters for forecasting.
 - 471 hours (~5%) had negative prices, down to −499 EUR/MWh: a battery gets paid to charge.
 
+## Baseline forecast
+
+A seasonal-naive baseline - predicting each hour's price as the price at the same hour, exactly
+one week earlier - gives a **mean absolute error of 53.53 EUR/MWh** on an 8-week chronological
+test split (37.1% of the mean test price). Evaluated on a time-based split, not a random one:
+the model can only ever see the past when forecasting the future, so the test set has to come
+strictly after the training history, the same way it would in real use.
+
+The baseline tracks the general daily shape well (it "remembers" that evenings are expensive and
+midday is cheap), but visibly misses on days where the actual price breaks from the prior week's
+pattern - see `02_baseline_forecast.ipynb` for a week-by-week comparison chart. That gap is what
+the gradient-boosting model (next step) has to close to be worth using over this much simpler
+approach.
+
 ## How to run
     python3 -m venv .venv && source .venv/bin/activate
     pip install -r requirements.txt
-    # then open 01_explore_prices.ipynb
+    # then open 01_explore_prices.ipynb or 02_baseline_forecast.ipynb
