@@ -13,7 +13,7 @@ you plan the battery around that forecast. This project builds both, step by ste
 - [x] Exploratory analysis: daily and weekly price patterns, negative-price hours
 - [x] Baseline forecast: "same hour last week" (seasonal naive), measured with MAE
 - [x] Machine-learning forecast (gradient boosting on calendar and lagged-price features), compared to the baseline
-- [ ] Battery optimization with linear programming (PuLP): 1 MWh battery, charge/discharge limits,
+- [x] Battery optimization with linear programming (PuLP): 1 MWh battery, charge/discharge limits,
       efficiency losses; compared to a simple rule-based strategy
 - [ ] Results: forecast error vs. baseline, revenue vs. rule-based strategy
 
@@ -72,6 +72,31 @@ had no way to surface, since it only ever looks a week back: yesterday's price i
 stronger predictor of today's than last week's price is. See `03_ml_forecast.ipynb` for the
 full feature importance chart and a side-by-side comparison of both forecasts against the same
 sample week used in the baseline notebook.
+
+## Battery optimization
+
+A linear program (PuLP, CBC solver) decides each hour's charge/discharge to maximize revenue,
+given a 1 MWh battery, a 1 MW charge/discharge rate (a full cycle takes one hour), and a 90%
+round-trip efficiency (a typical lithium-ion figure, not fitted to real hardware). Given the
+actual, realized prices over the same 8-week test window used for forecasting, this gives a
+perfect-foresight revenue ceiling - the best any schedule could possibly do - of
+**13,103.51 EUR**, against **9,310.87 EUR** for a naive rule-based strategy that always charges
+at 13:00 and discharges at 19:00 (the historically cheapest and most expensive hours, from the
+exploratory analysis), with no awareness of what any particular day actually looks like. The LP
+captures **40.7% more revenue** than the fixed-schedule rule, using the exact same battery
+physics for both, so the comparison is about strategy, not about different assumed hardware.
+
+**A finding worth being honest about, not hiding:** in about 4% of hours, the optimal schedule
+charges and discharges in the same hour - which looks like a bug at first (why would charging
+and then immediately discharging ever be worth it?). Checked rather than assumed: every single
+one of these hours happens during a negative electricity price, where charging earns money and
+discharging costs money, so the usual intuition doesn't hold. Some are the battery hitting its
+capacity ceiling and venting a little to keep charging at the max rate; others are the LP
+deliberately freeing up capacity during a merely-cheap hour to fully capture an even cheaper one
+an hour or two later - a genuine cross-hour lookahead trick a simple rule could never do. The
+total effect is tiny (0.08% of revenue) but real, not solver noise. See `04_battery_optimization.ipynb`
+for the full verification. This also surfaces a real model limitation worth naming: no cost for
+battery degradation/cycling wear is included, which a production system would need.
 
 ## How to run
     python3 -m venv .venv && source .venv/bin/activate
