@@ -62,3 +62,35 @@ def mae(actual, predicted):
     """
     aligned = pd.concat([actual, predicted], axis=1, keys=["actual", "predicted"]).dropna()
     return (aligned["actual"] - aligned["predicted"]).abs().mean()
+
+
+def build_features(df, column="price_eur_mwh"):
+    """Calendar + lag features for the gradient-boosting forecast.
+
+    All lags here are multiples of 24 hours (yesterday, two days ago, last week) -
+    deliberately NOT a 1-hour or few-hours-back lag. SMARD day-ahead prices are
+    auctioned once per day for all 24 hours of the next day at once, around midday.
+    At the moment that real forecast is actually made, "the price one hour ago"
+    relative to a given target hour tomorrow doesn't exist yet as usable information -
+    tomorrow hasn't happened. A short lag like that would let the model train on
+    information it could never actually have at real prediction time: leakage,
+    just a subtler form of it than usual. Lags of a full day or more sidestep this,
+    since they're always already-settled history by the time a real day-ahead
+    forecast would be made.
+
+    Calendar fields (hour, day of week, month, weekend flag) are safe regardless -
+    they're known in advance with certainty, no auction timing to worry about.
+
+    Returned aligned to the FULL input index, same reasoning as seasonal_naive_forecast:
+    shift on the whole continuous series first, slice into train/test afterward.
+    """
+    features = pd.DataFrame(index=df.index)
+    features["hour"] = df.index.hour
+    features["dayofweek"] = df.index.dayofweek
+    features["month"] = df.index.month
+    features["is_weekend"] = (df.index.dayofweek >= 5).astype(int)
+    features["lag_24h"] = df[column].shift(24)
+    features["lag_48h"] = df[column].shift(48)
+    features["lag_168h"] = df[column].shift(LAG_HOURS)
+    features[column] = df[column]
+    return features

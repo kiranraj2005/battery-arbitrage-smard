@@ -12,7 +12,7 @@ you plan the battery around that forecast. This project builds both, step by ste
 - [x] Automated download of hourly day-ahead prices (DE-LU) from the SMARD API (Bundesnetzagentur)
 - [x] Exploratory analysis: daily and weekly price patterns, negative-price hours
 - [x] Baseline forecast: "same hour last week" (seasonal naive), measured with MAE
-- [ ] Machine-learning forecast (gradient boosting on calendar and lagged-price features), compared to the baseline
+- [x] Machine-learning forecast (gradient boosting on calendar and lagged-price features), compared to the baseline
 - [ ] Battery optimization with linear programming (PuLP): 1 MWh battery, charge/discharge limits,
       efficiency losses; compared to a simple rule-based strategy
 - [ ] Results: forecast error vs. baseline, revenue vs. rule-based strategy
@@ -47,6 +47,31 @@ midday is cheap), but visibly misses on days where the actual price breaks from 
 pattern - see `02_baseline_forecast.ipynb` for a week-by-week comparison chart. That gap is what
 the gradient-boosting model (next step) has to close to be worth using over this much simpler
 approach.
+
+## Machine learning forecast
+
+A gradient-boosting model (scikit-learn's `GradientBoostingRegressor`) on calendar features
+(hour, day of week, month, weekend flag) plus three price lags brings the MAE down to
+**41.19 EUR/MWh — a 23% improvement over the 53.53 EUR/MWh seasonal-naive baseline**, on the
+exact same 8-week chronological test split.
+
+**A deliberate feature-engineering decision:** the lags used are 24h, 48h, and 168h (yesterday,
+two days ago, and last week, all at the same hour) - NOT a 1-hour-ago lag, even though that would
+be a more obviously "predictive" feature. SMARD day-ahead prices are auctioned once per day for
+all 24 hours of the next day at once. At the moment a real day-ahead forecast is actually made,
+"the price one hour ago" relative to a target hour tomorrow doesn't exist yet as usable
+information - tomorrow hasn't happened. Including it would be leakage: training the model on
+information it could never actually have at real prediction time. Every lag used here is always
+at least a full day old relative to its target hour, so the model only ever sees what a real
+forecast could see.
+
+Feature importances confirm the model is learning something real, not just memorizing noise:
+`lag_24h` (yesterday, same hour) accounts for 68% of the model's decisions - more than double
+`lag_168h` (last week, same hour) at 13%. That's a genuine finding the seasonal-naive baseline
+had no way to surface, since it only ever looks a week back: yesterday's price is actually a
+stronger predictor of today's than last week's price is. See `03_ml_forecast.ipynb` for the
+full feature importance chart and a side-by-side comparison of both forecasts against the same
+sample week used in the baseline notebook.
 
 ## How to run
     python3 -m venv .venv && source .venv/bin/activate
