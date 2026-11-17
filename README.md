@@ -1,6 +1,6 @@
 # Battery Arbitrage on German Power Prices
 
-**Status: in progress** — forecasting day-ahead electricity prices and using the forecast
+**Status: complete** — forecasting day-ahead electricity prices and using the forecast
 to schedule a battery's charging and discharging.
 
 ## Why this project
@@ -15,7 +15,7 @@ you plan the battery around that forecast. This project builds both, step by ste
 - [x] Machine-learning forecast (gradient boosting on calendar and lagged-price features), compared to the baseline
 - [x] Battery optimization with linear programming (PuLP): 1 MWh battery, charge/discharge limits,
       efficiency losses; compared to a simple rule-based strategy
-- [ ] Results: forecast error vs. baseline, revenue vs. rule-based strategy
+- [x] Results: forecast error vs. baseline, revenue vs. rule-based strategy
 
 ## Built on Job Market Radar
 This project reuses the approach of my earlier project
@@ -98,7 +98,37 @@ total effect is tiny (0.08% of revenue) but real, not solver noise. See `04_batt
 for the full verification. This also surfaces a real model limitation worth naming: no cost for
 battery degradation/cycling wear is included, which a production system would need.
 
+## Results: does a better forecast actually make more money?
+
+Bringing the forecasting and optimization halves of this project together, scored against the
+same 8-week holdout of real, realized prices throughout:
+
+| Strategy | Revenue (8 weeks) |
+|---|---|
+| Rule-based (fixed 13:00 charge / 19:00 discharge, no model) | 9,310.87 EUR |
+| **Forecast-driven LP (gradient boosting predictions)** | **10,405.21 EUR** |
+| Perfect foresight (theoretical ceiling, cannot be beaten) | 13,103.51 EUR |
+
+The gradient-boosting model cut forecast error by 23% over the seasonal-naive baseline
+(53.53 -> 41.19 EUR/MWh MAE). Translated into money, running the battery on that forecast
+instead of the naive fixed schedule captures **11.8% more revenue**, and reaches **79.4% of the
+theoretical maximum** that a schedule with perfect knowledge of the future could ever achieve.
+That's the real answer to "was building a better forecast worth it": yes, by a meaningful,
+quantified amount - not just a better error metric on paper, but money a real battery operator
+would actually see. See `05_results.ipynb` for the full calculation.
+
+(These figures are from a real run of the pinned `requirements.txt` environment. Re-running the
+gradient boosting step can shift the forecast-driven number by a small amount - under 0.2% in
+testing - since scikit-learn's tree-building isn't perfectly reproducible across library
+versions even with a fixed random seed. The rule-based and perfect-foresight figures, which
+don't depend on the ML model, are exactly reproducible.)
+
 ## How to run
     python3 -m venv .venv && source .venv/bin/activate
     pip install -r requirements.txt
-    # then open 01_explore_prices.ipynb or 02_baseline_forecast.ipynb
+    # notebooks run in order:
+    #   01_explore_prices.ipynb      - download data, exploratory analysis
+    #   02_baseline_forecast.ipynb   - seasonal-naive forecast baseline
+    #   03_ml_forecast.ipynb         - gradient boosting forecast
+    #   04_battery_optimization.ipynb - LP battery scheduling vs. rule-based
+    #   05_results.ipynb             - forecast error and revenue, brought together

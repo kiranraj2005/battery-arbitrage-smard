@@ -94,3 +94,27 @@ def build_features(df, column="price_eur_mwh"):
     features["lag_168h"] = df[column].shift(LAG_HOURS)
     features[column] = df[column]
     return features
+
+
+FEATURE_COLUMNS = ["hour", "dayofweek", "month", "is_weekend", "lag_24h", "lag_48h", "lag_168h"]
+
+
+def gradient_boosting_forecast(df, test_weeks=8, column="price_eur_mwh"):
+    """Fit the gradient boosting model on the chronological training split and return its
+    predictions for the test window, plus the fitted model itself.
+
+    This reuses the exact feature set and split validated in 03_ml_forecast.ipynb, so any other
+    notebook that needs the model's actual PREDICTIONS (not just its error metric) - like scoring
+    a battery schedule built from the forecast instead of from perfect-foresight prices - can
+    call this once instead of re-deriving the pipeline inline.
+    """
+    from sklearn.ensemble import GradientBoostingRegressor
+
+    features = build_features(df, column=column)
+    train_f, test_f = train_test_split_time(features, test_weeks=test_weeks)
+    train_f = train_f.dropna(subset=FEATURE_COLUMNS + [column])
+
+    model = GradientBoostingRegressor(random_state=42)
+    model.fit(train_f[FEATURE_COLUMNS], train_f[column])
+    predictions = pd.Series(model.predict(test_f[FEATURE_COLUMNS]), index=test_f.index)
+    return predictions, model
